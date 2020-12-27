@@ -1,0 +1,39 @@
+#!/usr/bin/python3
+from sage.all import *
+from l6 import decrypt
+from Crypto.Util.number import long_to_bytes
+
+q, h = (7638232120454925879231554234011842347641017888219021175304217358715878636183252433454896490677496516149889316745664606749499241420160898019203925115292257, 2163268902194560093843693572170199707501787797497998463462129592239973581462651622978282637513865274199374452805292639586264791317439029535926401109074800)
+
+M = MatrixSpace(ZZ, 2)([
+    [1, h],
+    [0, q],
+])
+
+ML = M.LLL()
+
+
+for row in ML.rows():
+    f, g = row
+    if f < 0 and g < 0:
+        g *= -1
+        f *= -1
+    if f > 0 and g > 0:
+        break
+else:
+    print("error, try linear combo")
+    quit()
+
+print(ML)
+print("f:", f)
+print("g:", g)
+print("h:", h)
+print("q:", q)
+
+assert (g * inverse_mod(f,q)) % q == h
+assert (g < sqrt(q))
+assert (f < sqrt(q))
+
+ct = long_to_bytes(5605696495253720664142881956908624307570671858477482119657436163663663844731169035682344974286379049123733356009125671924280312532755241162267269123486523)
+print(decrypt(q, h, f, g, ct))
+
