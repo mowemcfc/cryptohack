@@ -1,7 +1,9 @@
 #!/usr/bin/python3
 
-def main(n, e, ct):
+from Crypto.Util.number import long_to_bytes
 
+def main(n, e, ct):
+    return long_to_bytes(ct)
 
 
 if __name__ == "__main__":
