@@ -48,7 +48,8 @@ state = [
     [94, 79, 8, 54],
 ]
 
-state = inv_mix_columns(state)
-state = inv_shift_rows(state)
+inv_mix_columns(state)
+print(state)
+inv_shift_rows(state)
 state = [chr(item) for sublist in state for item in sublist]
 print("".join(state))
