@@ -3,16 +3,15 @@ N_ROUNDS = 10
 key        = b'\xc3,\\\xa6\xb5\x80^\x0c\xdb\x8d\xa5z*\xb6\xfe\\'
 ciphertext = b'\xd1O\x14j\xa4+O\xb6\xa1\xc4\x08B)\x8f\x12\xdd'
 
+with open('ct', 'wb') as f:
+    f.write(ciphertext)
 
-def add_round_key(s, k):
-    res = []
-    s = [item for sublist in s for item in sublist]
-    k = [item for sublist in k for item in sublist]
-    for (a,b) in zip(s, k):
-        print(a,b)
-        res.append(chr(a^b))
+with open('key', 'wb') as f2:
+    f2.write(key)
 
-    return "".join(res)
+print(bytes.hex(key))
+print(bytes.hex(ciphertext))
+
 
 s_box = (
     0x63, 0x7C, 0x77, 0x7B, 0xF2, 0x6B, 0x6F, 0xC5, 0x30, 0x01, 0x67, 0x2B, 0xFE, 0xD7, 0xAB, 0x76,
@@ -63,8 +62,6 @@ def matrix2bytes(matrix):
     for row in matrix:
         res.extend(row)
 
-    print(res)
-
     return "".join(chr(x) for x in res)
 
 
@@ -113,23 +110,80 @@ def expand_key(master_key):
     # Group key words in 4x4 byte matrices.
     return [key_columns[4*i : 4*(i+1)] for i in range(len(key_columns) // 4)]
 
+def shift_rows(s):
+    s[0][1], s[1][1], s[2][1], s[3][1] = s[1][1], s[2][1], s[3][1], s[0][1]
+    s[0][2], s[1][2], s[2][2], s[3][2] = s[2][2], s[3][2], s[0][2], s[1][2]
+    s[0][3], s[1][3], s[2][3], s[3][3] = s[3][3], s[0][3], s[1][3], s[2][3]
+
+
+def inv_shift_rows(s):
+    s[1][1], s[2][1], s[3][1], s[0][1] = s[0][1], s[1][1], s[2][1], s[3][1] 
+    s[2][2], s[3][2], s[0][2], s[1][2] = s[0][2], s[1][2], s[2][2], s[3][2]
+    s[3][3], s[0][3], s[1][3], s[2][3] = s[0][3], s[1][3], s[2][3], s[3][3]
+
+
+xtime = lambda a: (((a << 1) ^ 0x1B) & 0xFF) if (a & 0x80) else (a << 1)
+
+def mix_single_column(a):
+    # see Sec 4.1.2 in The Design of Rijndael
+    t = a[0] ^ a[1] ^ a[2] ^ a[3]
+    u = a[0]
+    a[0] ^= t ^ xtime(a[0] ^ a[1])
+    a[1] ^= t ^ xtime(a[1] ^ a[2])
+    a[2] ^= t ^ xtime(a[2] ^ a[3])
+    a[3] ^= t ^ xtime(a[3] ^ u)
+
+
+def mix_columns(s):
+    for i in range(4):
+        mix_single_column(s[i])
+
+
+def inv_mix_columns(s):
+    # see Sec 4.1.3 in The Design of Rijndael
+    for i in range(4):
+        u = xtime(xtime(s[i][0] ^ s[i][2]))
+        v = xtime(xtime(s[i][1] ^ s[i][3]))
+        s[i][0] ^= u
+        s[i][1] ^= v
+        s[i][2] ^= u
+        s[i][3] ^= v
+
+    mix_columns(s)
+
+
+def sub_bytes(s):
+    for i in range(len(s)):
+        for j in range(0,4):
+            s[i][j] = inv_s_box[s[i][j]]
+    return s
+
+def add_round_key(s, k):
+    return [[sss^kkk for sss, kkk in zip(ss, kk)] for ss, kk in zip(s, k)]
 
 def decrypt(key, ciphertext):
     round_keys = expand_key(key) # Remember to start from the last round key and work backwards through them when decrypting
-
+    print(len(round_keys))
     state = bytes2matrix(ciphertext)
-    print(state)
     # Convert ciphertext to state matrix
-
-    # Initial add round key step
-    state = add_round_key(
+    state = add_round_key(state, round_keys[N_ROUNDS])
     for i in range(N_ROUNDS - 1, 0, -1):
-        pass # Do round
-
+        inv_shift_rows(state)
+        print('after inv shift rows', state)
+        state =sub_bytes(state)
+        print('after sub bytes', state)
+        state = add_round_key(state, round_keys[i])
+        print('after round key', state)
+        inv_mix_columns(state)
+        print('after mix columns', state)
     # Run final round (skips the InvMixColumns step)
-
+    inv_shift_rows(state)
+    state = sub_bytes(state)
+    state = add_round_key(state, round_keys[0])
+    print('final pt', state)    
     # Convert state matrix to plaintext
-
+    plaintext = matrix2bytes(state)
+    print(type(plaintext))
     return plaintext
 
 
